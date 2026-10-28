@@ -1209,37 +1209,56 @@ describe("textWysiwyg", () => {
       });
     });
 
-    it("should bring a text that starts wrapping into view, with room at its right edge", async () => {
-      Keyboard.exitTextEditor(textarea);
-      UI.clickTool("text");
-      mouse.clickAt(300, 100);
-      textarea = await getTextEditor();
-      const { scrollY } = h.state;
-      // starts at 300px: it would stop growing well past the right edge
-      updateTextEditor(
-        textarea,
-        "Excalidraw is an opensource virtual collaborative whiteboard for sketching hand-drawn like diagrams!",
-      );
+    it.each([
+      { textAlign: TEXT_ALIGN.LEFT, anchorRatio: 0 },
+      { textAlign: TEXT_ALIGN.CENTER, anchorRatio: 0.5 },
+      { textAlign: TEXT_ALIGN.RIGHT, anchorRatio: 1 },
+    ])(
+      "should keep newly created free text anchored when it starts wrapping ($textAlign)",
+      async ({ textAlign, anchorRatio }) => {
+        Keyboard.exitTextEditor(textarea);
+        API.setAppState({ currentItemTextAlign: textAlign });
+        UI.clickTool("text");
+        mouse.clickAt(300, 100);
+        textarea = await getTextEditor();
+        const { scrollX, scrollY, zoom } = h.state;
+        const initialText = h.app.scene.getElement(
+          h.state.editingTextElement!.id,
+        ) as ExcalidrawTextElement;
+        const initialAnchorX = initialText.x + initialText.width * anchorRatio;
+        const textContent =
+          "Excalidraw is an opensource virtual collaborative whiteboard for sketching hand-drawn like diagrams!";
+        updateTextEditor(textarea, textContent);
 
-      const text = h.app.scene.getElement(
-        h.state.editingTextElement!.id,
-      ) as ExcalidrawTextElement;
-      expect(text.autoResize).toBe(false);
-      // as wide as the view less the room at each side, it now fills that
-      const zoom = h.state.zoom.value;
-      expect((text.x + h.state.scrollX) * zoom).toBeCloseTo(
-        TEXT_VIEWPORT_PADDING,
-      );
-      expect((text.x + text.width + h.state.scrollX) * zoom).toBeCloseTo(
-        800 - TEXT_VIEWPORT_PADDING,
-      );
-      // it fitted vertically already
-      expect(h.state.scrollY).toBe(scrollY);
-      // and the editor moved along
-      expect(parseFloat(textarea.style.left)).toBeCloseTo(
-        TEXT_VIEWPORT_PADDING,
-      );
-    });
+        let text = h.app.scene.getElement(
+          h.state.editingTextElement!.id,
+        ) as ExcalidrawTextElement;
+        expect(text.autoResize).toBe(false);
+        expect(h.state.scrollX).toBe(scrollX);
+        expect(h.state.scrollY).toBe(scrollY);
+        expect(
+          (text.x + text.width * anchorRatio + h.state.scrollX) * zoom.value,
+        ).toBeCloseTo((initialAnchorX + scrollX) * zoom.value);
+        expect((text.x + h.state.scrollX) * zoom.value).toBeGreaterThanOrEqual(
+          TEXT_VIEWPORT_PADDING,
+        );
+        expect(
+          (text.x + text.width + h.state.scrollX) * zoom.value,
+        ).toBeLessThanOrEqual(800 - TEXT_VIEWPORT_PADDING);
+        expect(parseFloat(textarea.style.left)).toBeCloseTo(
+          (text.x + h.state.scrollX) * zoom.value,
+        );
+
+        updateTextEditor(textarea, `${textContent} ${textContent}`);
+        text = h.app.scene.getElement(
+          h.state.editingTextElement!.id,
+        ) as ExcalidrawTextElement;
+        expect(h.state.scrollX).toBe(scrollX);
+        expect(
+          (text.x + text.width * anchorRatio + h.state.scrollX) * zoom.value,
+        ).toBeCloseTo((initialAnchorX + scrollX) * zoom.value);
+      },
+    );
 
     it("should leave the vertical to the caret when a text that starts wrapping is taller than the view", async () => {
       Keyboard.exitTextEditor(textarea);

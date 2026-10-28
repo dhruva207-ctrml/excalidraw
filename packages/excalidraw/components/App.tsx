@@ -9859,6 +9859,7 @@ class App extends React.Component<AppProps, AppState> {
 
         this.text.handleTextWysiwyg(newElement, {
           isExistingElement: true,
+          isNewlyCreated: true,
         });
       }
 

@@ -26,6 +26,7 @@ import {
   getElementAbsoluteCoords,
   getElementBounds,
   getLineHeightInPx,
+  getTextAnchorRatios,
   getStickyNoteLayout,
   hitElementItself,
   isArrowElement,
@@ -165,14 +166,38 @@ export class AppText {
     );
   };
 
+  private getMaxTextWidthFromAnchor = (
+    offsets: Required<Offsets>,
+    textElement: ExcalidrawTextElement,
+    maxWidth = this.getMaxTextWidth(offsets),
+  ) => {
+    const { scrollX, width, zoom } = this.app.state;
+    const anchorX =
+      (textElement.x +
+        textElement.width * getTextAnchorRatios(textElement).x +
+        scrollX) *
+      zoom.value;
+    const leftWidth = (anchorX - offsets.left) / zoom.value;
+    const rightWidth = (width - offsets.right - anchorX) / zoom.value;
+    const anchorWidth =
+      textElement.textAlign === "center"
+        ? 2 * Math.min(leftWidth, rightWidth)
+        : textElement.textAlign === "right"
+        ? leftWidth
+        : rightWidth;
+    return anchorWidth > 0 ? Math.min(maxWidth, anchorWidth) : maxWidth;
+  };
+
   public handleTextWysiwyg(
     element: NonDeleted<ExcalidrawTextElement>,
     {
       isExistingElement = false,
+      isNewlyCreated = false,
       initialCaretSceneCoords = null,
       initialSelection = null,
     }: {
       isExistingElement?: boolean;
+      isNewlyCreated?: boolean;
       /**
        * supply null if no caret positioning is desired, and instead
        * text should be auto-selected
@@ -207,7 +232,15 @@ export class AppText {
       const textViewportOffsets = this.getTextViewportOffsets(
         getElementBounds(latestTextElement, elementsMap),
       );
-      const maxWidth = this.getMaxTextWidth(textViewportOffsets);
+      // Row-specific overlays still let the caret pan into view as before.
+      const maxWidth =
+        isNewlyCreated && !container
+          ? this.getMaxTextWidthFromAnchor(
+              this.getTextViewportOffsets(),
+              latestTextElement,
+              this.getMaxTextWidth(textViewportOffsets),
+            )
+          : this.getMaxTextWidth(textViewportOffsets);
 
       this.app.scene.replaceAllElements([
         // Not sure why we include deleted elements as well hence using deleted elements map
@@ -867,6 +900,7 @@ export class AppText {
     if (autoEdit || existingTextElement || shouldBindToContainer) {
       this.handleTextWysiwyg(element, {
         isExistingElement: !!existingTextElement,
+        isNewlyCreated: !existingTextElement && !arrowEndpointBinding,
         initialCaretSceneCoords: existingTextElement
           ? initialCaretSceneCoords
           : null,
